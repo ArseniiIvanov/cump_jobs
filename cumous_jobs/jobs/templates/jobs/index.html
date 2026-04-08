@@ -1,0 +1,145 @@
+{% extends 'jobs/base.html' %}
+
+{% block title %}Главная - вакансии и стажировки{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <div class="container">
+        <h1 class="text-center mb-3">Найди работу или стажировку в кампусе</h1>
+        <p class="text-center lead">Актуальные вакансии от университета и партнёров</p>
+        <div class="text-center mt-4">
+            <a href="#vacancies" class="btn btn-primary btn-lg">Начать поиск</a>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-3 mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Фильтры</h5>
+                    <form id="filterForm">
+                        <div class="mb-3">
+                            <label class="form-label">Поиск по ключевым словам</label>
+                            <input type="text" id="searchInput" class="form-control" placeholder="Python, Django, аналитика...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Тип работы</label>
+                            <select id="workTypeFilter" class="form-select">
+                                <option value="">Все</option>
+                                <option value="full_time">Полная занятость</option>
+                                <option value="part_time">Частичная занятость</option>
+                                <option value="internship">Стажировка</option>
+                                <option value="remote">Удалённая работа</option>
+                            </select>
+                        </div>
+                        <button type="button" id="applyFilters" class="btn btn-primary w-100">Применить фильтры</button>
+                        <button type="button" id="resetFilters" class="btn btn-secondary w-100 mt-2">Сбросить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div id="vacanciesList" class="row">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function getWorkTypeText(type) {
+        const types = {
+            'full_time': 'Полная занятость',
+            'part_time': 'Частичная занятость',
+            'internship': 'Стажировка',
+            'remote': 'Удалённо'
+        };
+        return types[type] || type;
+    }
+    
+    function getStarsHtml(rating) {
+        if (!rating || rating === 0) return 'Нет оценок';
+        let stars = '';
+        for (let i = 1; i <= 5; i++) {
+            stars += i <= Math.round(rating) ? '★' : '☆';
+        }
+        return stars + ' (' + rating.toFixed(1) + ')';
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function loadVacancies() {
+        const search = document.getElementById('searchInput').value;
+        const workType = document.getElementById('workTypeFilter').value;
+        
+        let url = '/api/vacancies/';
+        const params = [];
+        if (search) params.push(`search=${encodeURIComponent(search)}`);
+        if (workType) params.push(`work_type=${workType}`);
+        if (params.length) url += '?' + params.join('&');
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('vacanciesList');
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="col-12 text-center"><p class="alert alert-info">Вакансий не найдено</p></div>';
+                    return;
+                }
+                
+                container.innerHTML = data.map(vacancy => `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card vacancy-card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">${escapeHtml(vacancy.title)}</h5>
+                                <p class="card-text text-muted small">${escapeHtml(vacancy.employer_name || 'Работодатель')}</p>
+                                <div class="mb-2">
+                                    <span class="work-type">${getWorkTypeText(vacancy.work_type)}</span>
+                                </div>
+                                <div class="mb-2 small text-warning">
+                                    ${getStarsHtml(vacancy.employer_average_rating)}
+                                </div>
+                                <p class="card-text small">${escapeHtml(vacancy.description.substring(0, 100))}...</p>
+                                <div class="salary mb-2">${vacancy.salary_display || 'Зарплата не указана'}</div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">${escapeHtml(vacancy.location || 'Кампус')}</small>
+                                    <a href="/vacancy/${vacancy.id}/" class="btn btn-sm btn-outline-primary">Подробнее</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки:', error);
+                document.getElementById('vacanciesList').innerHTML = '<div class="col-12 text-center text-danger">Ошибка загрузки вакансий</div>';
+            });
+    }
+    
+    document.getElementById('applyFilters').addEventListener('click', loadVacancies);
+    document.getElementById('resetFilters').addEventListener('click', () => {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('workTypeFilter').value = '';
+        loadVacancies();
+    });
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') loadVacancies();
+    });
+    
+    loadVacancies();
+</script>
+{% endblock %}
+{% endblock %}
