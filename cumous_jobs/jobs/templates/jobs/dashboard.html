@@ -1,0 +1,253 @@
+{% extends 'jobs/base.html' %}
+
+{% block title %}Личный кабинет{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h1 class="mb-4">Личный кабинет</h1>
+    
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Мои заявки</h5>
+                </div>
+                <div class="card-body">
+                    <div id="applicationsList">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-5">
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Календарь собеседований</h5>
+                </div>
+                <div class="card-body">
+                    <div id="interviewsList">
+                        <div class="text-center">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Уведомления</h5>
+                </div>
+                <div class="card-body">
+                    <div id="notificationsList">
+                        <div class="spinner-border spinner-border-sm text-primary"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="interviewModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали собеседования</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="interviewInfo"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function getCsrfToken() {
+        return document.getElementById('csrfToken')?.value || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+    
+    function getStatusText(status) {
+        const statuses = {
+            'pending': 'На рассмотрении',
+            'reviewed': 'Просмотрено',
+            'invited': 'Приглашение на собеседование',
+            'rejected': 'Отказ',
+            'accepted': 'Принят'
+        };
+        return statuses[status] || status;
+    }
+    
+    function getStatusClass(status) {
+        const classes = {
+            'pending': 'warning',
+            'reviewed': 'info',
+            'invited': 'success',
+            'rejected': 'danger',
+            'accepted': 'success'
+        };
+        return classes[status] || 'secondary';
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function cancelApplication(applicationId, vacancyTitle) {
+        if (!confirm(`Вы уверены, что хотите отменить заявку на вакансию "${vacancyTitle}"?`)) {
+            return;
+        }
+        
+        const csrfToken = getCsrfToken();
+        
+        fetch(`/api/cancel-application/${applicationId}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
+            }
+            return response.json();
+        })
+        .then(data => {
+            alert('Заявка отменена');
+            loadApplications();
+            loadNotifications();
+            loadInterviews();
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            alert('Ошибка: ' + (error.error || 'Не удалось отменить заявку'));
+        });
+    }
+    
+    function showInterviewDetails(interview) {
+        const modal = new bootstrap.Modal(document.getElementById('interviewModal'));
+        document.getElementById('interviewInfo').innerHTML = `
+            <p><strong>Вакансия:</strong> ${escapeHtml(interview.vacancy_title)}</p>
+            <p><strong>Компания:</strong> ${escapeHtml(interview.company_name)}</p>
+            <p><strong>Дата и время:</strong> ${new Date(interview.scheduled_date).toLocaleString('ru-RU')}</p>
+            <p><strong>Место:</strong> ${escapeHtml(interview.location) || 'Не указано'}</p>
+            <p><strong>Формат:</strong> ${interview.is_online ? 'Онлайн' : 'Офлайн'}</p>
+            ${interview.notes ? `<p><strong>Заметки:</strong> ${escapeHtml(interview.notes)}</p>` : ''}
+            <hr>
+            <div class="alert alert-info">
+                <small>Приходите вовремя. Если не можете присутствовать, свяжитесь с работодателем.</small>
+            </div>
+        `;
+        modal.show();
+    }
+    
+    function loadApplications() {
+        fetch('/api/my-applications/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('applicationsList');
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="alert alert-info">У вас пока нет заявок. Перейдите к списку вакансий и откликнитесь!</div>';
+                    return;
+                }
+                
+                container.innerHTML = data.map(app => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title fw-bold">${escapeHtml(app.vacancy_title)}</h6>
+                            <p class="card-text small text-muted">${escapeHtml(app.cover_letter) || 'Без сопроводительного письма'}</p>
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <span class="badge bg-${getStatusClass(app.status)}">${getStatusText(app.status)}</span>
+                                <div>
+                                    <small class="text-muted me-3">${new Date(app.applied_at).toLocaleDateString('ru-RU')}</small>
+                                    ${app.status === 'pending' || app.status === 'reviewed' ? `
+                                        <button onclick="cancelApplication(${app.id}, '${escapeHtml(app.vacancy_title)}')" 
+                                                class="btn btn-sm btn-outline-danger">
+                                            Отменить
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки заявок:', error);
+                document.getElementById('applicationsList').innerHTML = '<div class="alert alert-danger">Ошибка загрузки заявок</div>';
+            });
+    }
+    
+    function loadInterviews() {
+        fetch('/api/my-interviews/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('interviewsList');
+                
+                if (data.length === 0) {
+                    container.innerHTML = '<p class="text-muted text-center mb-0">Нет запланированных собеседований</p>';
+                    return;
+                }
+                
+                container.innerHTML = data.map(interview => `
+                    <div class="mb-3 pb-2 border-bottom">
+                        <div class="fw-bold">${escapeHtml(interview.vacancy_title)}</div>
+                        <small class="text-muted d-block">${escapeHtml(interview.company_name)}</small>
+                        <small class="text-success d-block">${new Date(interview.scheduled_date).toLocaleString('ru-RU')}</small>
+                        <small class="text-muted d-block">${escapeHtml(interview.location) || 'Место уточняется'}</small>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick='showInterviewDetails(${JSON.stringify(interview).replace(/'/g, "&#39;")})'>
+                            Подробнее
+                        </button>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки собеседований:', error);
+                document.getElementById('interviewsList').innerHTML = '<p class="text-danger">Ошибка загрузки собеседований</p>';
+            });
+    }
+    
+    function loadNotifications() {
+        fetch('/api/my-notifications/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('notificationsList');
+                if (data.length === 0) {
+                    container.innerHTML = '<p class="text-muted text-center mb-0">Нет уведомлений</p>';
+                    return;
+                }
+                
+                container.innerHTML = data.map(notif => `
+                    <div class="mb-2 pb-2 border-bottom ${!notif.is_read ? 'bg-light p-1 rounded' : ''}">
+                        <small class="text-muted">${new Date(notif.created_at).toLocaleDateString('ru-RU')} ${new Date(notif.created_at).toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})}</small>
+                        <div class="${!notif.is_read ? 'fw-bold' : ''}">${escapeHtml(notif.title)}</div>
+                        <small class="text-muted">${escapeHtml(notif.message)}</small>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Ошибка загрузки уведомлений:', error);
+                document.getElementById('notificationsList').innerHTML = '<p class="text-danger">Ошибка загрузки</p>';
+            });
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        loadApplications();
+        loadInterviews();
+        loadNotifications();
+    });
+</script>
+{% endblock %}
+{% endblock %}
