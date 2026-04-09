@@ -116,7 +116,35 @@ class ApplyToVacancyView(APIView):
 
 
 
-@login_required
-def dashboard_view(request):
-    """Личный кабинет студента"""
-    return render(request, 'jobs/dashboard.html')
+def reviews_view(request):
+    """Страница отзывов о работодателях"""
+    return render(request, 'jobs/reviews.html')
+
+# HTML страницы (фронтенд)
+
+def index_view(request):
+    """Главная страница со списком вакансий"""
+    return render(request, 'jobs/index.html')
+
+def vacancy_detail_view(request, pk):
+    """Страница деталей вакансии"""
+    return render(request, 'jobs/vacancy_detail.html', {'vacancy_id': pk})
+
+
+
+def login_view(request):
+    if request.method == 'POST':
+        username = request.POST['username']
+        password = request.POST['password']
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            next_url = request.GET.get('next', '/')
+            return redirect(next_url)
+        else:
+            messages.error(request, 'Неверный логин или пароль')
+    return render(request, 'jobs/login.html')
+
+def logout_view(request):
+    logout(request)
+    return redirect('/')
