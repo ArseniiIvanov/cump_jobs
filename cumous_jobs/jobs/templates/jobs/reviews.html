@@ -1,0 +1,201 @@
+{% extends 'jobs/base.html' %}
+
+{% block title %}Отзывы о работодателях{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h1 class="mb-4">Отзывы о работодателях</h1>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div id="reviewsList">
+                <div class="text-center">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Оставить отзыв</h5>
+                    {% if user.is_authenticated %}
+                        <form id="reviewForm">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label">Работодатель</label>
+                                <select class="form-select" id="employerSelect" required>
+                                    <option value="">Выберите работодателя</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Оценка</label>
+                                <div class="rating-stars">
+                                    <div class="btn-group" role="group">
+                                        <input type="radio" class="btn-check" name="rating" id="star1" value="1" autocomplete="off">
+                                        <label class="btn btn-outline-warning" for="star1">1</label>
+                                        
+                                        <input type="radio" class="btn-check" name="rating" id="star2" value="2" autocomplete="off">
+                                        <label class="btn btn-outline-warning" for="star2">2</label>
+                                        
+                                        <input type="radio" class="btn-check" name="rating" id="star3" value="3" autocomplete="off">
+                                        <label class="btn btn-outline-warning" for="star3">3</label>
+                                        
+                                        <input type="radio" class="btn-check" name="rating" id="star4" value="4" autocomplete="off">
+                                        <label class="btn btn-outline-warning" for="star4">4</label>
+                                        
+                                        <input type="radio" class="btn-check" name="rating" id="star5" value="5" autocomplete="off">
+                                        <label class="btn btn-outline-warning" for="star5">5</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Комментарий</label>
+                                <textarea class="form-control" id="comment" rows="3" placeholder="Расскажите о вашем опыте работы с этим работодателем..."></textarea>
+                            </div>
+                            <div id="reviewMessage" class="alert d-none"></div>
+                            <button type="submit" class="btn btn-primary w-100">Отправить отзыв</button>
+                        </form>
+                    {% else %}
+                        <p class="text-muted">Войдите, чтобы оставить отзыв</p>
+                        <a href="/login/" class="btn btn-primary">Войти</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function getStarsHtml(rating) {
+        let stars = '';
+        for (let i = 1; i <= 5; i++) {
+            stars += i <= rating ? '★' : '☆';
+        }
+        return stars;
+    }
+    
+    function loadReviews() {
+        fetch('/api/reviews/employer/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('reviewsList');
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="alert alert-info">Пока нет отзывов. Будьте первым!</div>';
+                    return;
+                }
+                
+                container.innerHTML = data.map(review => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h5 class="card-title">${escapeHtml(review.employer_name)}</h5>
+                                    <div class="mb-2">${getStarsHtml(review.rating)}</div>
+                                </div>
+                                <small class="text-muted">${new Date(review.created_at).toLocaleDateString('ru-RU')}</small>
+                            </div>
+                            <p class="card-text">${escapeHtml(review.comment)}</p>
+                            <small class="text-muted">— ${escapeHtml(review.student_name || review.student_username)}</small>
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                document.getElementById('reviewsList').innerHTML = '<div class="alert alert-danger">Ошибка загрузки отзывов</div>';
+            });
+    }
+    
+    function loadEmployers() {
+        fetch('/api/admin/employers/')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('employerSelect');
+                select.innerHTML = '<option value="">Выберите работодателя</option>' + 
+                    data.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+            })
+            .catch(error => console.error('Ошибка загрузки работодателей:', error));
+    }
+    
+    const reviewForm = document.getElementById('reviewForm');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const employerId = document.getElementById('employerSelect').value;
+            const ratingInput = document.querySelector('input[name="rating"]:checked');
+            const rating = ratingInput ? ratingInput.value : null;
+            const comment = document.getElementById('comment').value;
+            const csrfToken = document.getElementById('csrfToken')?.value;
+            
+            if (!employerId) {
+                showMessage('Пожалуйста, выберите работодателя', 'danger');
+                return;
+            }
+            
+            if (!rating) {
+                showMessage('Пожалуйста, поставьте оценку', 'danger');
+                return;
+            }
+            
+            fetch('/api/reviews/employer/create/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    employer: parseInt(employerId),
+                    rating: parseInt(rating),
+                    comment: comment
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Ошибка при отправке отзыва');
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                showMessage('Отзыв отправлен! Спасибо!', 'success');
+                
+                document.getElementById('employerSelect').value = '';
+                if (ratingInput) ratingInput.checked = false;
+                document.getElementById('comment').value = '';
+                
+                loadReviews();
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                showMessage(error.message, 'danger');
+            });
+        });
+    }
+    
+    function showMessage(message, type) {
+        const msgDiv = document.getElementById('reviewMessage');
+        msgDiv.className = `alert alert-${type}`;
+        msgDiv.innerHTML = message;
+        msgDiv.classList.remove('d-none');
+        
+        setTimeout(() => {
+            msgDiv.classList.add('d-none');
+        }, 3000);
+    }
+    
+    loadReviews();
+    loadEmployers();
+</script>
+{% endblock %}
+{% endblock %}
