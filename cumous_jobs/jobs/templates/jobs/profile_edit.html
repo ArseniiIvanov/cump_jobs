@@ -1,0 +1,142 @@
+{% extends 'jobs/base.html' %}
+
+{% block title %}Редактирование профиля{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h1 class="mb-4">Редактирование профиля</h1>
+    
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-body">
+                    <div id="profileForm">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Загрузка...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    function loadProfile() {
+        fetch('/api/my-profile/')
+            .then(response => response.json())
+            .then(profile => {
+                document.getElementById('profileForm').innerHTML = `
+                    <form id="editProfileForm">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Факультет</label>
+                            <input type="text" class="form-control" id="faculty" value="${escapeHtml(profile.faculty || '')}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Курс</label>
+                            <select class="form-select" id="yearOfStudy" required>
+                                <option value="1" ${profile.year_of_study == 1 ? 'selected' : ''}>1 курс</option>
+                                <option value="2" ${profile.year_of_study == 2 ? 'selected' : ''}>2 курс</option>
+                                <option value="3" ${profile.year_of_study == 3 ? 'selected' : ''}>3 курс</option>
+                                <option value="4" ${profile.year_of_study == 4 ? 'selected' : ''}>4 курс</option>
+                                <option value="5" ${profile.year_of_study == 5 ? 'selected' : ''}>5 курс</option>
+                                <option value="6" ${profile.year_of_study == 6 ? 'selected' : ''}>Магистратура</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Телефон</label>
+                            <input type="tel" class="form-control" id="phone" value="${escapeHtml(profile.phone || '')}" placeholder="+7 (999) 123-45-67">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">О себе</label>
+                            <textarea class="form-control" id="bio" rows="4" placeholder="Расскажите о своих навыках и интересах...">${escapeHtml(profile.bio || '')}</textarea>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="subscribeNotifications" ${profile.subscribe_notifications ? 'checked' : ''}>
+                            <label class="form-check-label" for="subscribeNotifications">
+                                Получать уведомления о новых вакансиях
+                            </label>
+                            <small class="text-muted d-block">Будем присылать вам уведомления, когда появляются новые подходящие вакансии</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Email (изменить нельзя)</label>
+                            <input type="email" class="form-control" value="${escapeHtml(profile.email || '')}" disabled>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Имя пользователя (изменить нельзя)</label>
+                            <input type="text" class="form-control" value="${escapeHtml(profile.username || '')}" disabled>
+                        </div>
+                        <div id="formMessage" class="alert d-none"></div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                            <a href="/profile/" class="btn btn-secondary">Отмена</a>
+                        </div>
+                    </form>
+                `;
+                
+                document.getElementById('editProfileForm').addEventListener('submit', saveProfile);
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                document.getElementById('profileForm').innerHTML = '<div class="alert alert-danger">Ошибка загрузки профиля</div>';
+            });
+    }
+    
+    function saveProfile(event) {
+        event.preventDefault();
+        
+        const formData = {
+            faculty: document.getElementById('faculty').value,
+            year_of_study: parseInt(document.getElementById('yearOfStudy').value),
+            phone: document.getElementById('phone').value,
+            bio: document.getElementById('bio').value,
+            subscribe_notifications: document.getElementById('subscribeNotifications').checked
+        };
+        
+        fetch('/api/my-profile/', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
+            }
+            return response.json();
+        })
+        .then(data => {
+            const messageDiv = document.getElementById('formMessage');
+            messageDiv.className = 'alert alert-success';
+            messageDiv.innerHTML = 'Профиль успешно обновлён!';
+            messageDiv.classList.remove('d-none');
+            setTimeout(() => {
+                window.location.href = '/profile/';
+            }, 1500);
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            const messageDiv = document.getElementById('formMessage');
+            messageDiv.className = 'alert alert-danger';
+            messageDiv.innerHTML = 'Ошибка: ' + (error.error || 'Не удалось сохранить профиль');
+            messageDiv.classList.remove('d-none');
+        });
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    loadProfile();
+</script>
+{% endblock %}
+{% endblock %}

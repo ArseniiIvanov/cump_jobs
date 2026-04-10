@@ -46,10 +46,13 @@ class VacancyCreateUpdateSerializer(serializers.ModelSerializer):
                   'work_type', 'salary_min', 'salary_max', 'location', 'status']
     
     def validate(self, data):
-        if not data.get('category'):
-            raise serializers.ValidationError({"category": "Категория обязательна"})
-        if not data.get('employer'):
-            raise serializers.ValidationError({"employer": "Работодатель обязателен"})
+        # При создании проверяем наличие category и employer
+        if self.instance is None:  # Это создание
+            if not data.get('category'):
+                raise serializers.ValidationError({"category": "Категория обязательна"})
+            if not data.get('employer'):
+                raise serializers.ValidationError({"employer": "Работодатель обязателен"})
+        # При обновлении эти поля не обязательны
         return data
 
 class ApplicationSerializer(serializers.ModelSerializer):

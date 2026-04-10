@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.core.validators import FileExtensionValidator
+from django.core.validators import FileExtensionValidator, RegexValidator
 from datetime import datetime
 
 class Category(models.Model):
@@ -20,7 +20,20 @@ class Employer(models.Model):
     name = models.CharField(max_length=200, verbose_name='Название организации')
     description = models.TextField(blank=True, verbose_name='Описание')
     contact_email = models.EmailField(verbose_name='Email для связи')
-    contact_phone = models.CharField(max_length=20, blank=True, verbose_name='Телефон')
+    
+    # Валидация телефона: формат +7XXXXXXXXXX
+    phone_regex = RegexValidator(
+        regex=r'^\+7\d{10}$',
+        message="Телефон должен быть в формате: +7XXXXXXXXXX (10 цифр после +7)"
+    )
+    contact_phone = models.CharField(
+        max_length=20, 
+        blank=True, 
+        validators=[phone_regex],
+        verbose_name='Телефон',
+        help_text='Формат: +7XXXXXXXXXX (например, +79161234567)'
+    )
+    
     logo = models.ImageField(upload_to='employers/', blank=True, null=True, verbose_name='Логотип')
     
     class Meta:
@@ -44,7 +57,21 @@ class StudentProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='student_profile', verbose_name='Пользователь')
     faculty = models.CharField(max_length=200, verbose_name='Факультет')
     year_of_study = models.IntegerField(choices=YEAR_CHOICES, verbose_name='Курс')
-    phone = models.CharField(max_length=20, blank=True, verbose_name='Телефон')
+    
+    # Валидация телефона: формат +7XXXXXXXXXX
+    phone_regex = RegexValidator(
+        regex=r'^\+7\d{10}$',
+        message="Телефон должен быть в формате: +7XXXXXXXXXX (10 цифр после +7)"
+    )
+    phone = models.CharField(
+        max_length=20, 
+        blank=True, 
+        validators=[phone_regex],
+        verbose_name='Телефон',
+        help_text='Формат: +7XXXXXXXXXX (например, +79161234567)'
+    )
+    
+    # Валидация резюме: только PDF, DOCX, DOC
     resume = models.FileField(
         upload_to='resumes/',
         blank=True,
@@ -52,10 +79,11 @@ class StudentProfile(models.Model):
         validators=[FileExtensionValidator(allowed_extensions=['pdf', 'docx', 'doc'])],
         verbose_name='Резюме'
     )
+    
     bio = models.TextField(blank=True, verbose_name='О себе')
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name='Аватар')
     subscribe_notifications = models.BooleanField(default=True, verbose_name='Подписка на новые вакансии')
-
+    
     class Meta:
         verbose_name = 'Профиль студента'
         verbose_name_plural = 'Профили студентов'
@@ -121,12 +149,15 @@ class Application(models.Model):
     student = models.ForeignKey(StudentProfile, on_delete=models.CASCADE, related_name='applications', verbose_name='Студент')
     vacancy = models.ForeignKey(Vacancy, on_delete=models.CASCADE, related_name='applications', verbose_name='Вакансия')
     cover_letter = models.TextField(blank=True, verbose_name='Сопроводительное письмо')
+    
     resume_version = models.FileField(
         upload_to='application_resumes/',
         blank=True,
         null=True,
+        validators=[FileExtensionValidator(allowed_extensions=['pdf', 'docx', 'doc'])],
         verbose_name='Резюме для этой заявки'
     )
+    
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='Статус')
     applied_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата подачи')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
@@ -204,6 +235,7 @@ class ReviewEmployer(models.Model):
     class Meta:
         verbose_name = 'Отзыв о работодателе'
         verbose_name_plural = 'Отзывы о работодателях'
+        unique_together = ['student', 'employer']  # Студент не может оставить два отзыва одному работодателю
     
     def __str__(self):
         return f"{self.student.user.username} -> {self.employer.name}: {self.rating}★"
@@ -219,7 +251,7 @@ class ReviewStudent(models.Model):
     class Meta:
         verbose_name = 'Отзыв о студенте'
         verbose_name_plural = 'Отзывы о студентах'
+        unique_together = ['employer', 'student']  # Работодатель не может оставить два отзыва одному студенту
     
     def __str__(self):
         return f"{self.employer.name} -> {self.student.user.username}: {self.rating}★"
-

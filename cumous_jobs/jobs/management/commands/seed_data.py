@@ -98,7 +98,7 @@ class Command(BaseCommand):
                     'work_type': work_type,
                     'salary_min': sal_min,
                     'salary_max': sal_max,
-                    'location': 'Москва, ул. Студенческая, д.1',
+                    'location': 'Екатеринбург, ул. Мира 32',
                     'status': 'active'
                 }
             )

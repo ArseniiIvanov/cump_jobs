@@ -1,0 +1,249 @@
+{% extends 'jobs/base.html' %}
+
+{% block title %}Детали вакансии{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div id="vacancyDetail">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Загрузка...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="applyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Откликнуться на вакансию</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="applyForm">
+                    <input type="hidden" name="csrfmiddlewaretoken" id="csrfTokenField" value="">
+                    <div class="mb-3">
+                        <label class="form-label">Сопроводительное письмо <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="coverLetter" rows="5" 
+                            placeholder="Расскажите, почему вы подходите на эту позицию..."></textarea>
+                        <small class="text-muted">Обязательное поле. Напишите, почему вы хотите получить эту позицию.</small>
+                        <div class="invalid-feedback" id="coverLetterError" style="display: none;">
+                            Пожалуйста, напишите сопроводительное письмо
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Резюме <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="resumeFile" accept=".pdf,.docx,.doc">
+                        <small class="text-muted">Обязательное поле. Поддерживаемые форматы: PDF, DOCX, DOC</small>
+                        <div class="invalid-feedback" id="resumeError" style="display: none;">
+                            Пожалуйста, загрузите резюме в формате PDF, DOCX или DOC
+                        </div>
+                    </div>
+                    <div id="applyMessage" class="alert d-none"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="submitApply">Отправить заявку</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    const currentVacancyId = {{ vacancy_id }};
+    
+    // Установка CSRF токена
+    document.getElementById('csrfTokenField').value = document.getElementById('csrfToken').value;
+    
+    function loadVacancy() {
+        fetch(`/api/vacancies/${currentVacancyId}/`)
+            .then(response => response.json())
+            .then(vacancy => {
+                const isActive = vacancy.status === 'active';
+                
+                document.getElementById('vacancyDetail').innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h1 class="card-title">${escapeHtml(vacancy.title)}</h1>
+                            <p class="text-muted">
+                                <strong>${escapeHtml(vacancy.employer?.name || 'Работодатель')}</strong> • 
+                                <span class="badge bg-secondary">${getWorkTypeText(vacancy.work_type)}</span>
+                                ${vacancy.status === 'closed' ? '<span class="badge bg-danger ms-2">Вакансия закрыта</span>' : ''}
+                            </p>
+                            
+                            <div class="row mt-4 mb-4">
+                                <div class="col-md-6">
+                                    <h5>Зарплата</h5>
+                                    <p class="salary">${vacancy.salary_display || 'Не указана'}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h5>Место работы</h5>
+                                    <p>${escapeHtml(vacancy.location || 'Кампус')}</p>
+                                </div>
+                            </div>
+                            
+                            <h4>Описание</h4>
+                            <p>${escapeHtml(vacancy.description)}</p>
+                            
+                            <h4>Требования</h4>
+                            <p>${escapeHtml(vacancy.requirements)}</p>
+                            
+                            <div class="mt-4">
+                                ${isActive ? 
+                                    `<button class="btn btn-primary btn-lg" onclick="openApplyModal()">
+                                        Откликнуться
+                                    </button>` : 
+                                    `<button class="btn btn-secondary btn-lg" disabled>
+                                        Вакансия закрыта
+                                    </button>`
+                                }
+                                <a href="/" class="btn btn-outline-secondary btn-lg">Назад к списку</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                document.getElementById('vacancyDetail').innerHTML = `
+                    <div class="alert alert-danger">Ошибка загрузки вакансии</div>
+                `;
+            });
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function getWorkTypeText(type) {
+        const types = {
+            'full_time': 'Полная занятость',
+            'part_time': 'Частичная занятость',
+            'internship': 'Стажировка',
+            'remote': 'Удалённо'
+        };
+        return types[type] || type;
+    }
+    
+    function validateFile(file) {
+        if (!file) return false; // файл обязателен
+        const allowedExtensions = ['pdf', 'docx', 'doc'];
+        const extension = file.name.split('.').pop().toLowerCase();
+        return allowedExtensions.includes(extension);
+    }
+    
+    function showError(fieldId, errorId, show, message) {
+        const field = document.getElementById(fieldId);
+        const errorDiv = document.getElementById(errorId);
+        if (show) {
+            field.classList.add('is-invalid');
+            errorDiv.style.display = 'block';
+            if (message) errorDiv.innerHTML = message;
+        } else {
+            field.classList.remove('is-invalid');
+            errorDiv.style.display = 'none';
+        }
+    }
+    
+    window.openApplyModal = function() {
+        {% if not user.is_authenticated %}
+            alert('Пожалуйста, войдите в систему');
+            window.location.href = '/login/?next=/vacancy/' + currentVacancyId + '/';
+            return;
+        {% endif %}
+        
+        // Очищаем форму
+        document.getElementById('coverLetter').value = '';
+        document.getElementById('resumeFile').value = '';
+        document.getElementById('applyMessage').classList.add('d-none');
+        
+        // Убираем ошибки
+        showError('coverLetter', 'coverLetterError', false);
+        showError('resumeFile', 'resumeError', false);
+        
+        new bootstrap.Modal(document.getElementById('applyModal')).show();
+    };
+    
+    document.getElementById('submitApply').addEventListener('click', function() {
+        const coverLetter = document.getElementById('coverLetter').value;
+        const resumeFile = document.getElementById('resumeFile').files[0];
+        
+        let hasError = false;
+        
+        // Проверка сопроводительного письма (обязательно)
+        if (!coverLetter.trim()) {
+            showError('coverLetter', 'coverLetterError', true, 'Пожалуйста, напишите сопроводительное письмо');
+            hasError = true;
+        } else {
+            showError('coverLetter', 'coverLetterError', false);
+        }
+        
+        // Проверка файла резюме (обязательно)
+        if (!resumeFile) {
+            showError('resumeFile', 'resumeError', true, 'Пожалуйста, загрузите резюме');
+            hasError = true;
+        } else if (!validateFile(resumeFile)) {
+            showError('resumeFile', 'resumeError', true, 'Файл должен быть в формате PDF, DOCX или DOC');
+            hasError = true;
+        } else {
+            showError('resumeFile', 'resumeError', false);
+        }
+        
+        if (hasError) return;
+        
+        const formData = new FormData();
+        formData.append('vacancy', currentVacancyId);
+        formData.append('cover_letter', coverLetter);
+        formData.append('resume_version', resumeFile);
+        
+        fetch('/api/apply/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.getElementById('csrfToken').value
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
+            }
+            return response.json();
+        })
+        .then(data => {
+            const messageDiv = document.getElementById('applyMessage');
+            messageDiv.className = 'alert alert-success';
+            messageDiv.innerHTML = 'Заявка успешно отправлена!';
+            messageDiv.classList.remove('d-none');
+            setTimeout(() => {
+                bootstrap.Modal.getInstance(document.getElementById('applyModal')).hide();
+                window.location.href = '/dashboard/';
+            }, 1500);
+        })
+        .catch(error => {
+            console.error('Ошибка:', error);
+            const messageDiv = document.getElementById('applyMessage');
+            messageDiv.className = 'alert alert-danger';
+            
+            if (error.error === 'Вы уже подали заявку на эту вакансию') {
+                messageDiv.innerHTML = 'Вы уже подавали заявку на эту вакансию. Нельзя откликнуться дважды.';
+            } else {
+                messageDiv.innerHTML = 'Ошибка: ' + (error.error || 'Не удалось отправить заявку');
+            }
+            messageDiv.classList.remove('d-none');
+        });
+    });
+    
+    loadVacancy();
+</script>
+{% endblock %}
+{% endblock %}
