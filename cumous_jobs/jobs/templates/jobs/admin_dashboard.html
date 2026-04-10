@@ -1,0 +1,559 @@
+{% extends 'jobs/base.html' %}
+
+{% block title %}Админ-панель - Управление вакансиями{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h1 class="mb-4">👨‍💼 Админ-панель</h1>
+    
+    <!-- Кнопка создания вакансии -->
+    <div class="mb-4">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createVacancyModal">
+            <i class="bi bi-plus-circle"></i> + Новая вакансия
+        </button>
+    </div>
+    
+    <!-- Вкладки -->
+    <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="vacancies-tab" data-bs-toggle="tab" data-bs-target="#vacancies" type="button" role="tab">
+                📋 Вакансии
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="applications-tab" data-bs-toggle="tab" data-bs-target="#applications" type="button" role="tab">
+                📝 Отклики
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="employers-tab" data-bs-toggle="tab" data-bs-target="#employers" type="button" role="tab">
+                🏢 Работодатели
+            </button>
+        </li>
+    </ul>
+    
+    <div class="tab-content">
+        <!-- Вкладка Вакансии -->
+        <div class="tab-pane fade show active" id="vacancies" role="tabpanel">
+            <div id="vacanciesList">
+                <div class="text-center">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Вкладка Отклики -->
+        <div class="tab-pane fade" id="applications" role="tabpanel">
+            <div id="applicationsList">
+                <div class="text-center">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Вкладка Работодатели -->
+        <div class="tab-pane fade" id="employers" role="tabpanel">
+            <div id="employersList">
+                <div class="text-center">
+                    <div class="spinner-border text-primary"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно создания вакансии -->
+<div class="modal fade" id="createVacancyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">➕ Создание вакансии</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createVacancyForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Название вакансии *</label>
+                        <input type="text" class="form-control" id="vacancyTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Работодатель *</label>
+                        <select class="form-select" id="vacancyEmployer" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Категория *</label>
+                        <select class="form-select" id="vacancyCategory" required></select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Тип работы *</label>
+                        <select class="form-select" id="vacancyWorkType" required>
+                            <option value="full_time">Полная занятость</option>
+                            <option value="part_time">Частичная занятость</option>
+                            <option value="internship">Стажировка</option>
+                            <option value="remote">Удалённая работа</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Зарплата от</label>
+                            <input type="number" class="form-control" id="vacancySalaryMin">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Зарплата до</label>
+                            <input type="number" class="form-control" id="vacancySalaryMax">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Место работы</label>
+                        <input type="text" class="form-control" id="vacancyLocation" placeholder="Москва, ул. Студенческая, д.1">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание *</label>
+                        <textarea class="form-control" id="vacancyDescription" rows="4" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Требования *</label>
+                        <textarea class="form-control" id="vacancyRequirements" rows="3" required></textarea>
+                    </div>
+                    <div id="createVacancyMessage" class="alert d-none"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="submitCreateVacancy">Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно редактирования вакансии -->
+<div class="modal fade" id="editVacancyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">✏️ Редактирование вакансии</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editVacancyForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="editVacancyId">
+                    <div class="mb-3">
+                        <label class="form-label">Название вакансии *</label>
+                        <input type="text" class="form-control" id="editVacancyTitle" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Тип работы *</label>
+                        <select class="form-select" id="editVacancyWorkType" required>
+                            <option value="full_time">Полная занятость</option>
+                            <option value="part_time">Частичная занятость</option>
+                            <option value="internship">Стажировка</option>
+                            <option value="remote">Удалённая работа</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Зарплата от</label>
+                            <input type="number" class="form-control" id="editVacancySalaryMin">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Зарплата до</label>
+                            <input type="number" class="form-control" id="editVacancySalaryMax">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Место работы</label>
+                        <input type="text" class="form-control" id="editVacancyLocation">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Статус</label>
+                        <select class="form-select" id="editVacancyStatus">
+                            <option value="active">Активна</option>
+                            <option value="closed">Закрыта</option>
+                            <option value="draft">Черновик</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Описание *</label>
+                        <textarea class="form-control" id="editVacancyDescription" rows="4" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Требования *</label>
+                        <textarea class="form-control" id="editVacancyRequirements" rows="3" required></textarea>
+                    </div>
+                    <div id="editVacancyMessage" class="alert d-none"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" id="deleteVacancyBtn">Удалить</button>
+                <button type="button" class="btn btn-primary" id="submitEditVacancy">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно управления откликом -->
+<div class="modal fade" id="manageApplicationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">📝 Управление откликом</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="applicationInfo"></div>
+                <hr>
+                <label class="form-label">Изменить статус:</label>
+                <select class="form-select" id="applicationStatusSelect">
+                    <option value="pending">На рассмотрении</option>
+                    <option value="reviewed">Просмотрено</option>
+                    <option value="invited">Пригласить на собеседование</option>
+                    <option value="rejected">Отказать</option>
+                    <option value="accepted">Принять</option>
+                </select>
+                <div id="interviewFields" style="display:none;" class="mt-3">
+                    <label class="form-label">Дата собеседования</label>
+                    <input type="datetime-local" class="form-control mb-2" id="interviewDate">
+                    <label class="form-label">Место проведения</label>
+                    <input type="text" class="form-control mb-2" id="interviewLocation" placeholder="Кабинет 305 или ссылка на Zoom">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="interviewOnline">
+                        <label class="form-check-label">Онлайн собеседование</label>
+                    </div>
+                    <label class="form-label">Заметки</label>
+                    <textarea class="form-control" id="interviewNotes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <button type="button" class="btn btn-primary" id="updateApplicationStatus">Сохранить изменения</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    let currentApplicationId = null;
+    
+    function getCsrfToken() {
+        return document.getElementById('csrfToken')?.value || document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // ========== Управление вакансиями ==========
+    function loadVacancies() {
+        fetch('/api/admin/vacancies/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('vacanciesList');
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="alert alert-info">Нет вакансий</div>';
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr><th>ID</th><th>Название</th><th>Работодатель</th><th>Тип</th><th>Статус</th><th>Действия</th></tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(v => `
+                                    <tr>
+                                        <td>${v.id}</td>
+                                        <td>${escapeHtml(v.title)}</td>
+                                        <td>${escapeHtml(v.employer_name)}</td>
+                                        <td>${v.work_type}</td>
+                                        <td><span class="badge bg-${v.status === 'active' ? 'success' : 'secondary'}">${v.status}</span></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="editVacancy(${v.id})">✏️</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                document.getElementById('vacanciesList').innerHTML = '<div class="alert alert-danger">Ошибка загрузки</div>';
+            });
+    }
+    
+    function loadEmployersAndCategories() {
+        fetch('/api/admin/employers/')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('vacancyEmployer');
+                select.innerHTML = data.map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');
+            });
+        
+        fetch('/api/admin/categories/')
+            .then(response => response.json())
+            .then(data => {
+                const select = document.getElementById('vacancyCategory');
+                select.innerHTML = data.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+            });
+    }
+    
+    function editVacancy(id) {
+        fetch(`/api/admin/vacancies/${id}/`)
+            .then(response => response.json())
+            .then(vacancy => {
+                document.getElementById('editVacancyId').value = vacancy.id;
+                document.getElementById('editVacancyTitle').value = vacancy.title;
+                document.getElementById('editVacancyWorkType').value = vacancy.work_type;
+                document.getElementById('editVacancySalaryMin').value = vacancy.salary_min || '';
+                document.getElementById('editVacancySalaryMax').value = vacancy.salary_max || '';
+                document.getElementById('editVacancyLocation').value = vacancy.location || '';
+                document.getElementById('editVacancyStatus').value = vacancy.status;
+                document.getElementById('editVacancyDescription').value = vacancy.description;
+                document.getElementById('editVacancyRequirements').value = vacancy.requirements;
+                new bootstrap.Modal(document.getElementById('editVacancyModal')).show();
+            });
+    }
+    
+    document.getElementById('submitCreateVacancy').addEventListener('click', function() {
+        const data = {
+            title: document.getElementById('vacancyTitle').value,
+            employer: parseInt(document.getElementById('vacancyEmployer').value),
+            category: parseInt(document.getElementById('vacancyCategory').value),
+            work_type: document.getElementById('vacancyWorkType').value,
+            salary_min: parseInt(document.getElementById('vacancySalaryMin').value) || null,
+            salary_max: parseInt(document.getElementById('vacancySalaryMax').value) || null,
+            location: document.getElementById('vacancyLocation').value,
+            description: document.getElementById('vacancyDescription').value,
+            requirements: document.getElementById('vacancyRequirements').value,
+            status: 'active'
+        };
+        
+        fetch('/api/admin/vacancies/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            const msg = document.getElementById('createVacancyMessage');
+            if (response.ok) {
+                msg.className = 'alert alert-success';
+                msg.innerHTML = '✅ Вакансия создана!';
+                msg.classList.remove('d-none');
+                setTimeout(() => {
+                    bootstrap.Modal.getInstance(document.getElementById('createVacancyModal')).hide();
+                    loadVacancies();
+                }, 1500);
+            } else {
+                msg.className = 'alert alert-danger';
+                msg.innerHTML = '❌ Ошибка: ' + JSON.stringify(data);
+                msg.classList.remove('d-none');
+            }
+        });
+    });
+    
+    document.getElementById('submitEditVacancy').addEventListener('click', function() {
+        const id = document.getElementById('editVacancyId').value;
+        const data = {
+            title: document.getElementById('editVacancyTitle').value,
+            work_type: document.getElementById('editVacancyWorkType').value,
+            salary_min: parseInt(document.getElementById('editVacancySalaryMin').value) || null,
+            salary_max: parseInt(document.getElementById('editVacancySalaryMax').value) || null,
+            location: document.getElementById('editVacancyLocation').value,
+            status: document.getElementById('editVacancyStatus').value,
+            description: document.getElementById('editVacancyDescription').value,
+            requirements: document.getElementById('editVacancyRequirements').value
+        };
+        
+        fetch(`/api/admin/vacancies/${id}/`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            const msg = document.getElementById('editVacancyMessage');
+            if (response.ok) {
+                msg.className = 'alert alert-success';
+                msg.innerHTML = '✅ Вакансия обновлена!';
+                msg.classList.remove('d-none');
+                setTimeout(() => {
+                    bootstrap.Modal.getInstance(document.getElementById('editVacancyModal')).hide();
+                    loadVacancies();
+                }, 1500);
+            } else {
+                msg.className = 'alert alert-danger';
+                msg.innerHTML = '❌ Ошибка: ' + JSON.stringify(data);
+                msg.classList.remove('d-none');
+            }
+        });
+    });
+    
+    document.getElementById('deleteVacancyBtn').addEventListener('click', function() {
+        if (!confirm('Удалить вакансию? Это действие нельзя отменить.')) return;
+        const id = document.getElementById('editVacancyId').value;
+        
+        fetch(`/api/admin/vacancies/${id}/`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': getCsrfToken() }
+        })
+        .then(() => {
+            bootstrap.Modal.getInstance(document.getElementById('editVacancyModal')).hide();
+            loadVacancies();
+        });
+    });
+    
+    // ========== Управление откликами ==========
+    function loadApplications() {
+        fetch('/api/admin/applications/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('applicationsList');
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="alert alert-info">Нет откликов</div>';
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr><th>ID</th><th>Студент</th><th>Вакансия</th><th>Статус</th><th>Дата</th><th>Действия</th></tr>
+                            </thead>
+                            <tbody>
+                                ${data.map(app => `
+                                    <tr>
+                                        <td>${app.id}</td>
+                                        <td>${escapeHtml(app.student_name)}</td>
+                                        <td>${escapeHtml(app.vacancy_title)}</td>
+                                        <td><span class="badge bg-${getStatusClass(app.status)}">${getStatusText(app.status)}</span></td>
+                                        <td>${new Date(app.applied_at).toLocaleDateString()}</td>
+                                        <td>
+                                            <button class="btn btn-sm btn-outline-primary" onclick="manageApplication(${app.id})">📝 Управлять</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+    }
+    
+    function manageApplication(id) {
+        currentApplicationId = id;
+        fetch(`/api/admin/applications/${id}/`)
+            .then(response => response.json())
+            .then(app => {
+                document.getElementById('applicationInfo').innerHTML = `
+                    <p><strong>Студент:</strong> ${escapeHtml(app.student_name)}</p>
+                    <p><strong>Вакансия:</strong> ${escapeHtml(app.vacancy_title)}</p>
+                    <p><strong>Сопроводительное письмо:</strong> ${escapeHtml(app.cover_letter) || 'Нет'}</p>
+                    <p><strong>Дата подачи:</strong> ${new Date(app.applied_at).toLocaleString()}</p>
+                `;
+                document.getElementById('applicationStatusSelect').value = app.status;
+                
+                const showInterview = app.status === 'invited';
+                document.getElementById('interviewFields').style.display = showInterview ? 'block' : 'none';
+                
+                new bootstrap.Modal(document.getElementById('manageApplicationModal')).show();
+            });
+    }
+    
+    document.getElementById('applicationStatusSelect').addEventListener('change', function() {
+        const show = this.value === 'invited';
+        document.getElementById('interviewFields').style.display = show ? 'block' : 'none';
+    });
+    
+    document.getElementById('updateApplicationStatus').addEventListener('click', function() {
+        const newStatus = document.getElementById('applicationStatusSelect').value;
+        const data = { status: newStatus };
+        
+        if (newStatus === 'invited') {
+            data.interview = {
+                scheduled_date: document.getElementById('interviewDate').value,
+                location: document.getElementById('interviewLocation').value,
+                is_online: document.getElementById('interviewOnline').checked,
+                notes: document.getElementById('interviewNotes').value
+            };
+        }
+        
+        fetch(`/api/admin/applications/${currentApplicationId}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(() => {
+            bootstrap.Modal.getInstance(document.getElementById('manageApplicationModal')).hide();
+            loadApplications();
+        });
+    });
+    
+    // ========== Работодатели ==========
+    function loadEmployers() {
+        fetch('/api/admin/employers/')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('employersList');
+                if (data.length === 0) {
+                    container.innerHTML = '<div class="alert alert-info">Нет работодателей</div>';
+                    return;
+                }
+                
+                container.innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead><tr><th>ID</th><th>Название</th><th>Email</th><th>Телефон</th></tr></thead>
+                            <tbody>
+                                ${data.map(e => `
+                                    <tr>
+                                        <td>${e.id}</td>
+                                        <td>${escapeHtml(e.name)}</td>
+                                        <td>${escapeHtml(e.contact_email)}</td>
+                                        <td>${escapeHtml(e.contact_phone) || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            });
+    }
+    
+    function getStatusText(status) {
+        const s = { 'pending':'На рассмотрении','reviewed':'Просмотрено','invited':'Приглашение','rejected':'Отказ','accepted':'Принят' };
+        return s[status] || status;
+    }
+    
+    function getStatusClass(status) {
+        const c = { 'pending':'warning','reviewed':'info','invited':'success','rejected':'danger','accepted':'success' };
+        return c[status] || 'secondary';
+    }
+    
+    // Загрузка всех данных
+    loadVacancies();
+    loadApplications();
+    loadEmployers();
+    loadEmployersAndCategories();
+</script>
+{% endblock %}
+{% endblock %}
